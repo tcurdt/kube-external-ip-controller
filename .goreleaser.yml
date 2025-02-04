@@ -1,0 +1,131 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    # - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      # - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .CommitDate }} -X main.treeState={{ .IsGitDirty }} -X main.builtBy=goreleaser
+    hooks:
+      pre:
+        # - script.sh
+      post:
+        # - upx "{{ .Path }}"
+        # - codesign -project="{{ .ProjectName }}" "{{ .Path }}"
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# universal_binaries:
+#   - replace: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - format: zip
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-dev"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
+    dockerfile: .goreleaser.Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--label=sha={{.FullCommit}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.licenses=Apache"
+      - "--pull"
+      - "--platform=linux/amd64"
+  - image_templates:
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
+    dockerfile: .goreleaser.Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--label=sha={{.FullCommit}}"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.licenses=Apache"
+      - "--pull"
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  - name_template: "ghcr.io/tcurdt/{{ .ProjectName }}:latest"
+    image_templates:
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
+  - name_template: "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}"
+    image_templates:
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
+  - name_template: "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Major }}"
+    image_templates:
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
+      - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
+
+release:
+  name_template: "v{{ .Version }}"
+  header: |
+    ### {{ .Now.Format "2006-01-02" }}
+    **Full Changelog**: [{{ .PreviousTag }} → {{ .Tag }}](https://github.com/tcurdt/oci-resolve/compare/{{ .PreviousTag }}...{{ .Tag }})
+  # footer: |
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore"
+  groups:
+    - title: "Dependency updates"
+      regexp: '^.*?(feat|fix)\(deps\)!?:.+$'
+      order: 300
+    - title: "New Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 100
+    - title: "Security updates"
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 150
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 200
+    - title: "Documentation updates"
+      regexp: '^.*?doc(\([[:word:]]+\))??!?:.+$'
+      order: 400
+    - title: "Other"
+      order: 9999
+# announce:
+#   twitter:
+#     enabled: false
+#     message_template: "oci-resolve {{ .Tag }} is out! Check it out: https://github.com/tcurdt/oci-resolve/releases/tag/{{ .Tag }}"
+#   mastodon:
+#     enabled: true
+#     message_template: "oci-resolve {{ .Tag }} is out! Check it out: https://github.com/tcurdt/oci-resolve/releases/tag/{{ .Tag }}"
+#     server: https://fosstodon.org
+#   discord:
+#     enabled: true
+#     message_template: "oci-resolve {{ .Tag }} is out! Check it out: https://github.com/tcurdt/oci-resolve/releases/tag/{{ .Tag }}"
