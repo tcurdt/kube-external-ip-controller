@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -67,7 +68,12 @@ func getIP(interfaceName string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no address found for interface %s", interfaceName)
+	names := make([]string, 0)
+	for _, iface := range ifaces {
+		names = append(names, iface.Name)
+	}
+
+	return "", fmt.Errorf("no address found for interface [%s] in [%v]", interfaceName, strings.Join(names, ","))
 }
 
 func (c *AddressController) Run() {
