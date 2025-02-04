@@ -5,16 +5,19 @@ before:
     - go mod tidy
     # - go generate ./...
 
+# builds:
+#   - skip: true
+
 builds:
   - env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
+      # - darwin
       # - windows
     goarch:
       - amd64
-      - arm64
+      # - arm64
     goarm:
       - "7"
     flags:
@@ -36,15 +39,15 @@ metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - format: zip
+  - formats: ["zip"]
 
-snapshot:
-  name_template: "{{ incpatch .Version }}-dev"
+# snapshot:
+#   version_template: "{{ incpatch .Version }}-dev"
 
 dockers:
   - image_templates:
       - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
-    dockerfile: .goreleaser.Dockerfile
+    dockerfile: Dockerfile # .goreleaser.Dockerfile
     use: buildx
     build_flag_templates:
       - "--label=sha={{.FullCommit}}"
