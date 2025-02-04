@@ -19,7 +19,8 @@ type AddressController struct {
 	clientset       *kubernetes.Clientset
 	serviceInformer cache.SharedIndexInformer
 	interfaceIPs    map[string]string
-	stopCh          chan struct{}
+	channelStop     chan struct{}
+	channelTrigger  chan struct{}
 }
 
 func NewAddressController(clientset *kubernetes.Clientset) (*AddressController, error) {
@@ -30,7 +31,8 @@ func NewAddressController(clientset *kubernetes.Clientset) (*AddressController, 
 		clientset:       clientset,
 		serviceInformer: serviceInformer,
 		interfaceIPs:    make(map[string]string),
-		stopCh:          make(chan struct{}),
+		channelStop:     make(chan struct{}),
+		channelTrigger:  make(chan struct{}, 1),
 	}
 
 	serviceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -78,56 +80,55 @@ func getIP(interfaceName string) (string, error) {
 func (c *AddressController) Run() {
 
 	// start the service informer
-	go c.serviceInformer.Run(c.stopCh)
+	go c.serviceInformer.Run(c.channelStop)
 
 	// start address monitoring
 	go c.monitorInterfaces()
 
-	<-c.stopCh
+	<-c.channelStop
 }
 
 func (c *AddressController) Stop() {
-	close(c.stopCh)
+	close(c.channelStop)
 }
 
 func (c *AddressController) monitorInterfaces() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-
-			interfaces, err := net.Interfaces()
-			if err != nil {
-				log.Printf("Error getting interfaces: %v", err)
-				continue
-			}
-
-			names := make([]string, 0)
-			for _, iface := range interfaces {
-				names = append(names, iface.Name)
-			}
-			log.Printf("interfaces: [%s]", strings.Join(names, ","))
-			log.Printf("addresses: %v", c.interfaceIPs)
-
-			// check for changes in the interfaces
-			for _, iface := range interfaces {
-				newIP, err := getIP(iface.Name)
-				if err != nil {
-					log.Printf("Error getting IP for interface [%s]: %v", iface.Name, err)
-					continue
-				}
-
-				oldIP := c.interfaceIPs[iface.Name]
-				if oldIP != newIP {
-					log.Printf("IP changed for [%s] from [%s] => [%s]", iface.Name, oldIP, newIP)
-					c.updateServicesForInterface(iface.Name, oldIP, newIP)
-					c.interfaceIPs[iface.Name] = newIP
-				}
-			}
-		case <-c.stopCh:
+			c.checkInterfacesAndUpdateServices()
+		case <-c.channelTrigger:
+			c.checkInterfacesAndUpdateServices()
+		case <-c.channelStop:
 			return
+		}
+	}
+}
+
+func (c *AddressController) checkInterfacesAndUpdateServices() {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		log.Printf("Error getting interfaces: %v", err)
+		return
+	}
+
+	log.Printf("addresses: %v", c.interfaceIPs)
+
+	// check for changes in the interfaces
+	for _, iface := range interfaces {
+		newIP, err := getIP(iface.Name)
+		if err != nil {
+			continue
+		}
+
+		oldIP := c.interfaceIPs[iface.Name]
+		if oldIP != newIP {
+			log.Printf("IP changed for [%s] from [%s] => [%s]", iface.Name, oldIP, newIP)
+			c.updateServicesForInterface(iface.Name, oldIP, newIP)
+			c.interfaceIPs[iface.Name] = newIP
 		}
 	}
 }
@@ -143,22 +144,32 @@ func (c *AddressController) updateServicesForInterface(interfaceName, oldIP, new
 		if interfaceName == getInterfaceAnnotation(&service) {
 			updatedService := service.DeepCopy()
 
-			// new external IPs
-			newExternalIPs := make([]string, 0)
-
-			// keep IPs from other interfaces
+			// set of new IPs
+			newIPs := make(map[string]struct{})
 			for _, ip := range updatedService.Spec.ExternalIPs {
 				if ip != oldIP {
-					newExternalIPs = append(newExternalIPs, ip)
+					newIPs[ip] = struct{}{}
 				}
 			}
+			newIPs[newIP] = struct{}{}
 
-			// add the new IP
-			newExternalIPs = append(newExternalIPs, newIP)
+			// set of old IPs
+			oldIPs := make(map[string]struct{})
+			for _, ip := range updatedService.Spec.ExternalIPs {
+				oldIPs[ip] = struct{}{}
+			}
 
-			// only update on change
-			if !stringSlicesEqual(updatedService.Spec.ExternalIPs, newExternalIPs) {
+			if !setsAreEqual(oldIPs, newIPs) {
+
+				// convert set to array
+				newExternalIPs := make([]string, 0, len(newIPs))
+				for ip := range newIPs {
+					newExternalIPs = append(newExternalIPs, ip)
+				}
+
 				updatedService.Spec.ExternalIPs = newExternalIPs
+
+				// update the service
 				_, err := c.clientset.CoreV1().Services(service.Namespace).Update(
 					context.Background(), updatedService, metav1.UpdateOptions{})
 				if err != nil {
@@ -173,66 +184,23 @@ func (c *AddressController) updateServicesForInterface(interfaceName, oldIP, new
 	}
 }
 
-func stringSlicesEqual(a, b []string) bool {
+func setsAreEqual(a, b map[string]struct{}) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	aMap := make(map[string]struct{}, len(a))
-	bMap := make(map[string]struct{}, len(b))
-
-	for _, v := range a {
-		aMap[v] = struct{}{}
-	}
-	for _, v := range b {
-		bMap[v] = struct{}{}
-	}
-
-	for k := range aMap {
-		if _, ok := bMap[k]; !ok {
+	for ip := range a {
+		if _, exists := b[ip]; !exists {
 			return false
 		}
 	}
+	for ip := range b {
+		if _, exists := a[ip]; !exists {
+			return false
+		}
+	}
+
 	return true
-}
-
-func (c *AddressController) ensureServiceHasIP(service *corev1.Service) {
-	interfaceName := getInterfaceAnnotation(service)
-	if interfaceName == "" {
-		return
-	}
-
-	ip, exists := c.interfaceIPs[interfaceName]
-	if !exists {
-
-		newIP, err := getIP(interfaceName)
-		if err != nil {
-			log.Printf("Error getting IP for interface [%s]: %v", interfaceName, err)
-			return
-		}
-		ip = newIP
-		c.interfaceIPs[interfaceName] = ip
-	}
-
-	hasIP := false
-	for _, existingIP := range service.Spec.ExternalIPs {
-		if existingIP == ip {
-			hasIP = true
-			break
-		}
-	}
-
-	if !hasIP {
-		updatedService := service.DeepCopy()
-		updatedService.Spec.ExternalIPs = append(updatedService.Spec.ExternalIPs, ip)
-
-		_, err := c.clientset.CoreV1().Services(service.Namespace).Update(
-			context.Background(), updatedService, metav1.UpdateOptions{})
-		if err != nil {
-			log.Printf("Error updating service %s/%s: %v",
-				service.Namespace, service.Name, err)
-		}
-	}
 }
 
 func getInterfaceAnnotation(service *corev1.Service) string {
@@ -240,11 +208,17 @@ func getInterfaceAnnotation(service *corev1.Service) string {
 }
 
 func (c *AddressController) handleAdd(obj interface{}) {
-	// service := obj.(*corev1.Service)
-	// c.ensureServiceHasIP(service)
+	// try but don't block
+	select {
+	case c.channelTrigger <- struct{}{}:
+	default:
+	}
 }
 
 func (c *AddressController) handleUpdate(old, new interface{}) {
-	// service := new.(*corev1.Service)
-	// c.ensureServiceHasIP(service)
+	// try but don't block
+	select {
+	case c.channelTrigger <- struct{}{}:
+	default:
+	}
 }
