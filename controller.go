@@ -114,6 +114,7 @@ func (c *AddressController) monitorInterfaces() {
 			for _, iface := range interfaces {
 				newIP, err := getIP(iface.Name)
 				if err != nil {
+					log.Printf("Error getting IP for interface [%s]: %v", iface.Name, err)
 					continue
 				}
 
