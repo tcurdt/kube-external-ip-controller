@@ -60,7 +60,7 @@ dockers:
       - "--platform=linux/amd64"
   - image_templates:
       - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
-    dockerfile: .goreleaser.Dockerfile
+    dockerfile: Dockerfile # .goreleaser.Dockerfile
     use: buildx
     build_flag_templates:
       - "--label=sha={{.FullCommit}}"
