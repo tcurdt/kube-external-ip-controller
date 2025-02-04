@@ -105,6 +105,12 @@ func (c *AddressController) monitorInterfaces() {
 				continue
 			}
 
+			names := make([]string, 0)
+			for _, iface := range interfaces {
+				names = append(names, iface.Name)
+			}
+			log.Printf("checking interfaces: [%s]", strings.Join(names, ","))
+
 			// check for changes in the interfaces
 			for _, iface := range interfaces {
 				newIP, err := getIP(iface.Name)
