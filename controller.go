@@ -115,7 +115,7 @@ func (c *AddressController) checkInterfacesAndUpdateServices() {
 		return
 	}
 
-	log.Printf("addresses: %v", c.interfaceIPs)
+	// log.Printf("addresses: %v", c.interfaceIPs)
 
 	// check for changes in the interfaces
 	for _, iface := range interfaces {
@@ -208,6 +208,7 @@ func getInterfaceAnnotation(service *corev1.Service) string {
 }
 
 func (c *AddressController) handleAdd(obj interface{}) {
+	log.Printf("re-evaluation triggered by add")
 	// try but don't block
 	select {
 	case c.channelTrigger <- struct{}{}:
@@ -216,6 +217,7 @@ func (c *AddressController) handleAdd(obj interface{}) {
 }
 
 func (c *AddressController) handleUpdate(old, new interface{}) {
+	log.Printf("re-evaluation triggered by update")
 	// try but don't block
 	select {
 	case c.channelTrigger <- struct{}{}:
