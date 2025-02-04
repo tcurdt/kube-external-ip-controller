@@ -50,13 +50,12 @@ func getIP(interfaceName string) (string, error) {
 
 	for _, iface := range ifaces {
 		if iface.Name != interfaceName {
-			log.Printf("ignoring [%s]", iface.Name)
 			continue
 		}
 
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return "", fmt.Errorf("failed to get addresses for interface [%s]: %v", interfaceName, err)
+			continue
 		}
 
 		for _, addr := range addrs {
@@ -115,12 +114,11 @@ func (c *AddressController) monitorInterfaces() {
 			for _, iface := range interfaces {
 				newIP, err := getIP(iface.Name)
 				if err != nil {
-					log.Printf("No IP for [%s]: %v", iface.Name, err)
 					continue
 				}
 
-				oldIP, exists := c.interfaceIPs[iface.Name]
-				if !exists || oldIP != newIP {
+				oldIP := c.interfaceIPs[iface.Name]
+				if oldIP != newIP {
 					log.Printf("IP changed for [%s] from [%s] => [%s]", iface.Name, oldIP, newIP)
 					c.updateServicesForInterface(iface.Name, oldIP, newIP)
 					c.interfaceIPs[iface.Name] = newIP
