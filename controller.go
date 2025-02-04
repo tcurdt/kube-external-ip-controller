@@ -40,26 +40,34 @@ func NewAddressController(clientset *kubernetes.Clientset) (*AddressController, 
 	return c, nil
 }
 
-func getInterfaceIP(interfaceName string) (string, error) {
-	iface, err := net.InterfaceByName(interfaceName)
+func getIP(interfaceName string) (string, error) {
+
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", fmt.Errorf("failed to get interface %s: %v", interfaceName, err)
+		return "", fmt.Errorf("failed to get interfaces: %v", err)
 	}
 
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return "", fmt.Errorf("failed to get addresses for interface %s: %v", interfaceName, err)
-	}
+	for _, iface := range ifaces {
+		if iface.Name != interfaceName {
+			// log.Printf("ignoring {%v}", iface.Name)
+			continue
+		}
 
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String(), nil
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", fmt.Errorf("failed to get addresses for interface [%s]: %v", interfaceName, err)
+		}
+
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ipnet.IP.To4() != nil {
+					return ipnet.IP.String(), nil
+				}
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no IPv4 address found for interface %s", interfaceName)
+	return "", fmt.Errorf("no address found for interface %s", interfaceName)
 }
 
 func (c *AddressController) Run() {
@@ -78,7 +86,7 @@ func (c *AddressController) Stop() {
 }
 
 func (c *AddressController) monitorInterfaces() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -93,14 +101,14 @@ func (c *AddressController) monitorInterfaces() {
 
 			// check for changes in the interfaces
 			for _, iface := range interfaces {
-				newIP, err := getInterfaceIP(iface.Name)
+				newIP, err := getIP(iface.Name)
 				if err != nil {
 					continue
 				}
 
 				oldIP, exists := c.interfaceIPs[iface.Name]
 				if !exists || oldIP != newIP {
-					log.Printf("IP changed for interface %s from %s to %s", iface.Name, oldIP, newIP)
+					log.Printf("IP changed for [%s] from [%s] => [%s]", iface.Name, oldIP, newIP)
 					c.updateServicesForInterface(iface.Name, oldIP, newIP)
 					c.interfaceIPs[iface.Name] = newIP
 				}
@@ -184,9 +192,9 @@ func (c *AddressController) ensureServiceHasIP(service *corev1.Service) {
 	ip, exists := c.interfaceIPs[interfaceName]
 	if !exists {
 
-		newIP, err := getInterfaceIP(interfaceName)
+		newIP, err := getIP(interfaceName)
 		if err != nil {
-			log.Printf("Error getting IP for interface %s: %v", interfaceName, err)
+			log.Printf("Error getting IP for interface [%s]: %v", interfaceName, err)
 			return
 		}
 		ip = newIP
