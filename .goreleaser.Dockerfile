@@ -8,7 +8,7 @@ FROM scratch
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /etc/passwd /etc/passwd
-COPY ./external-ip-controller /usr/local/bin/external-ip-controller
+COPY ./kube-external-ip-controller /usr/local/bin/external-ip-controller
 USER nobody
 WORKDIR /
 CMD ["/usr/local/bin/external-ip-controller"]
