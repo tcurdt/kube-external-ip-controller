@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: external-ip-controller
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: external-ip-controller
+  template:
+    metadata:
+      labels:
+        app: external-ip-controller
+    spec:
+      hostNetwork: true
+      serviceAccountName: external-ip-controller
+      containers:
+        - name: controller
+          image: ghcr.io/tcurdt/kube-external-ip-controller:latest
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["NET_ADMIN", "SYS_ADMIN"]
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi 
