@@ -1,11 +1,11 @@
 FROM golang:1.23-alpine AS builder
 
 RUN apk update && apk upgrade && apk add --no-cache ca-certificates
+WORKDIR /app
 ADD . /app
 RUN echo "nobody:x:65534:65534:Nobody:/:" > /app/passwd
-WORKDIR /app
 RUN ls -la
-RUN go build ./...
+RUN go -o external-ip-controller build ./...
 
 FROM scratch
 

@@ -48,6 +48,8 @@ dockers:
   - image_templates:
       - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-amd64"
     dockerfile: Dockerfile # .goreleaser.Dockerfile
+    extra_files:
+      - .
     use: buildx
     build_flag_templates:
       - "--label=sha={{.FullCommit}}"
@@ -61,6 +63,8 @@ dockers:
   - image_templates:
       - "ghcr.io/tcurdt/{{ .ProjectName }}:v{{ .Version }}-arm64"
     dockerfile: Dockerfile # .goreleaser.Dockerfile
+    extra_files:
+      - .
     use: buildx
     build_flag_templates:
       - "--label=sha={{.FullCommit}}"
