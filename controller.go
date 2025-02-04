@@ -108,7 +108,8 @@ func (c *AddressController) monitorInterfaces() {
 			for _, iface := range interfaces {
 				names = append(names, iface.Name)
 			}
-			log.Printf("checking interfaces: [%s]", strings.Join(names, ","))
+			log.Printf("interfaces: [%s]", strings.Join(names, ","))
+			log.Printf("addresses: %v", c.interfaceIPs)
 
 			// check for changes in the interfaces
 			for _, iface := range interfaces {
@@ -239,11 +240,11 @@ func getInterfaceAnnotation(service *corev1.Service) string {
 }
 
 func (c *AddressController) handleAdd(obj interface{}) {
-	service := obj.(*corev1.Service)
-	c.ensureServiceHasIP(service)
+	// service := obj.(*corev1.Service)
+	// c.ensureServiceHasIP(service)
 }
 
 func (c *AddressController) handleUpdate(old, new interface{}) {
-	service := new.(*corev1.Service)
-	c.ensureServiceHasIP(service)
+	// service := new.(*corev1.Service)
+	// c.ensureServiceHasIP(service)
 }
