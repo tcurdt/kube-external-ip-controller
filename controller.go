@@ -50,7 +50,7 @@ func getIP(interfaceName string) (string, error) {
 
 	for _, iface := range ifaces {
 		if iface.Name != interfaceName {
-			// log.Printf("ignoring {%v}", iface.Name)
+			log.Printf("ignoring [%s]", iface.Name)
 			continue
 		}
 
@@ -115,6 +115,7 @@ func (c *AddressController) monitorInterfaces() {
 			for _, iface := range interfaces {
 				newIP, err := getIP(iface.Name)
 				if err != nil {
+					log.Printf("No IP for [%s]: %v", iface.Name, err)
 					continue
 				}
 
