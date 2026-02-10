@@ -2,7 +2,7 @@ module vafer.org/external-ip-controller
 
 go 1.25.0
 
-toolchain go1.25.7
+toolchain go1.26.0
 
 require (
 	k8s.io/api v0.35.0
